@@ -23,6 +23,7 @@ const App = () => {
     const qrCodeData = sets
       .map((set) => {
         const setIdMatch = set.match(/SetNumber="(.*?)"/);
+        const imp = set.match(/IMP="(.*?)"/);
         const setId = setIdMatch && setIdMatch[1];
 
         const blockMatch = set.match(/<Block\d+\s+[^>]*>/g);
@@ -30,11 +31,19 @@ const App = () => {
         const blockData = blockMatch
           .map((block) => {
             const blockValues = block.match(/RG="(.*?)"/);
-            return blockValues && blockValues[1];
+            const rg = blockValues && blockValues[1];
+            const agMatch = block.match(/AG="(.*?)"/);
+            const ag = agMatch && agMatch[1];
+            const paddedRg =
+              rg && (parseInt(rg.split(",")[0]) < 10 ? `0${rg}` : rg);
+            return `${paddedRg}${ag}`;
           })
           .join("");
 
-        return setId && `Set:${blockData}\n`;
+        return (
+          setId &&
+          `LOT21:WMD1JC${imp[1] === "True" ? "MYS" : "MNS"}${blockData}\n`
+        );
       })
       .filter((data) => data);
 
