@@ -34,9 +34,12 @@ const App = () => {
             const rg = blockValues && blockValues[1];
             const agMatch = block.match(/AG="(.*?)"/);
             const ag = agMatch && agMatch[1];
+
+            console.log("AG", ag);
             const paddedRg =
               rg && (parseInt(rg.split(",")[0]) < 10 ? `0${rg}` : rg);
-            return `${paddedRg}${ag}`;
+            const paddedAg = ag && (parseInt(ag) < 10 ? `0${ag}` : ag);
+            return `${paddedRg}${paddedAg}`;
           })
           .join("");
 
