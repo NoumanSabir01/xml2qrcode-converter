@@ -36,7 +36,11 @@ const App = () => {
             const ag = agMatch && agMatch[1];
 
             const paddedRg =
-              rg && (parseInt(rg.split(",")[0]) < 10 ? `0${rg}` : rg);
+              rg &&
+              rg
+                .split(",")
+                .map((r) => (parseInt(r) < 10 ? `0${r}` : r))
+                .join(",");
             const paddedAg = ag && (parseInt(ag) < 10 ? `0${ag}` : ag);
             return `${paddedRg}${paddedAg}`;
           })
@@ -44,7 +48,7 @@ const App = () => {
 
         return (
           setId &&
-          `LOT21:WMD1JC${imp[1] === "True" ? "MYS" : "MNS"}${blockData}\n`
+          `LOT21:WMD1JC${imp[1] === "True" ? "MYS" : "MNS"}${blockData}`
         );
       })
       .filter((data) => data);
