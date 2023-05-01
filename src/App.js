@@ -10,25 +10,49 @@ const App = () => {
   const [qrCodes, setQrCodes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [xmlData, setXmlData] = useState("");
+  const [Ln, setLn] = useState("");
+  const [Dn, setDn] = useState("");
+  const [phone, setPhone] = useState("");
 
   const generateQrCodes = async () => {
     setLoading(true);
 
     const sets = xmlData.match(/<set[^>]*>(.*?)<\/set>/gs);
+    const headMatch = xmlData.match(/<[^>]+>/);
+
+    const head = headMatch && headMatch[0];
+    const lnMatch = head.match(/LN="(.*?)"/);
+    const ln = lnMatch && lnMatch[1];
+    const dnMatch = head.match(/DN="(.*?)"/);
+    const dn = dnMatch && dnMatch[1];
+    setLn(ln);
+    setDn(dn);
 
     if (!sets) {
       setLoading(false);
       return;
     }
-    const qrCodeData = sets
-      .map((set) => {
+
+    const qrCodes = [];
+
+    for (let i = 0; i < sets.length; i += 10) {
+      const setIdMatch = sets[i].match(/SetNumber="(.*?)"/);
+      const imp = sets[i].match(/IMP="(.*?)"/);
+      const setId = setIdMatch && setIdMatch[1];
+
+      const blockData = [];
+
+      for (let j = i; j < i + 10; j++) {
+        if (!sets[j]) {
+          break;
+        }
+
+        const set = sets[j];
         const setIdMatch = set.match(/SetNumber="(.*?)"/);
-        const imp = set.match(/IMP="(.*?)"/);
         const setId = setIdMatch && setIdMatch[1];
+        const blocksMatch = set.match(/<Block\d+\s+[^>]*>/g);
 
-        const blockMatch = set.match(/<Block\d+\s+[^>]*>/g);
-
-        const blockData = blockMatch
+        const setBlocksData = blocksMatch
           .map((block) => {
             const blockValues = block.match(/RG="(.*?)"/);
             const rg = blockValues && blockValues[1];
@@ -42,45 +66,170 @@ const App = () => {
                 .map((r) => (parseInt(r) < 10 ? `0${r}` : r))
                 .join(",");
             const paddedAg = ag && (parseInt(ag) < 10 ? `0${ag}` : ag);
+
             return `${paddedRg}${paddedAg}`;
           })
           .join("");
 
-        return (
-          setId &&
-          `LOT21:WMD1JC${imp[1] === "True" ? "MYS" : "MNS"}${blockData}`
-        );
-      })
-      .filter((data) => data);
+        let start =
+          ln === "USMM" || ln === "TMM"
+            ? "MD1JC"
+            : ln === "TMJJ"
+            ? "MD1JCB4S"
+            : ln === "USPB" || ln === "TPB"
+            ? "PD1JC"
+            : ln === "TL"
+            ? "LD1JC"
+            : ln === "TLX"
+            ? "LD1JC"
+            : ln === "TWO"
+            ? "SD1S"
+            : ln === "C5"
+            ? "CD1K0S"
+            : "X";
 
-    const qrCodes = [];
-    let currentQrCode = "";
-    for (let i = 0; i < qrCodeData.length; i++) {
-      currentQrCode += qrCodeData[i];
-      if ((i + 1) % 10 === 0 || i === qrCodeData.length - 1) {
-        const qrCodeImage = await QRCode.toDataURL(
-          currentQrCode.replace(/,/g, "").replace(/http:/g, ""),
-          { noSymbol: true }
-        );
-        qrCodes.push(qrCodeImage);
-        currentQrCode = "";
+        let mid =
+          imp === "True" || ln === "TLX"
+            ? "MYS"
+            : ln === "TMJJ"
+            ? ""
+            : imp === "False"
+            ? "MNS"
+            : "";
+
+        blockData.push({
+          setId: setId,
+          data: setBlocksData,
+          lotData: `LOT21:W${start}${mid}${setBlocksData}\n`,
+        });
       }
+
+      const qrCodeData =
+        setId && blockData.map((block) => block.lotData).join("");
+
+      const qrCodeImage = await QRCode.toDataURL(
+        qrCodeData.replace(/,/g, "").replace(/http:/g, ""),
+        { noSymbol: true }
+      );
+
+      qrCodes.push({
+        qrCode: qrCodeImage,
+        setsData: blockData,
+      });
     }
 
     setLoading(false);
     setQrCodes(qrCodes);
   };
 
-  const generatePdf = () => {
+  const generatePdf = (viewPdf) => {
+    const fileName = `${Ln}-${Dn}-Set-${qrCodes[0].setsData[0].setId}-${
+      qrCodes[qrCodes.length - 1].setsData[9].setId
+    }.pdf`;
+
     const docDefinition = {
-      content: qrCodes.map((qrCodeData) => ({
-        image: qrCodeData,
-        width: 200,
-        alignment: "center",
-        pageBreak: "after",
-      })),
+      info: {
+        title: fileName,
+        author: "Your Name",
+      },
+      content: qrCodes
+        .map((qrCodeData) => {
+          const setId = qrCodeData.setsData[0].setId;
+          const lastSetId =
+            qrCodeData.setsData[qrCodeData.setsData.length - 1].setId;
+          const titleText = `${Ln} ${Dn}\nSet ${setId}-${lastSetId}`;
+
+          const qrCodeSection = {
+            stack: [
+              { text: titleText, style: "title" },
+              {
+                image: qrCodeData.qrCode,
+                width: 200,
+                alignment: "center",
+                margin: [0, 10],
+              },
+            ],
+            pageBreak: "after",
+          };
+
+          const setDataSection = {
+            table: {
+              headerRows: 1,
+              widths: ["auto", "*"],
+              body: [
+                [
+                  { text: "Set ID", style: "tableHeader", width: "auto" },
+                  { text: "Data", style: "tableHeader", width: "*" },
+                ],
+                ...qrCodeData.setsData.map(({ setId, lotData }) => [
+                  { text: setId, style: "tableCell", width: "auto" },
+                  {
+                    text: lotData.replaceAll(",", ""),
+                    style: "tableCell",
+                    width: "*",
+                  },
+                ]),
+              ],
+            },
+            layout: {
+              defaultBorder: false,
+              hLineWidth: (i, node) => {
+                return i === 0 || i === node.table.body.length ? 0 : 1;
+              },
+              fillColor: function (rowIndex) {
+                return rowIndex % 2 === 0 ? "#EEEEEE" : null;
+              },
+              vLineWidth: (i, node) => {
+                return 0;
+              },
+              hLineColor: (i, node) => {
+                return i === 0 || i === node.table.body.length
+                  ? "transparent"
+                  : "#ccc";
+              },
+              paddingLeft: (i, node) => {
+                return i === 0 ? 5 : 5;
+              },
+              paddingRight: (i, node) => {
+                return i === 0 ? 5 : 0;
+              },
+              paddingTop: (i, node) => {
+                return i === 0 ? 5 : 2;
+              },
+              paddingBottom: (i, node) => {
+                return i === node.table.body.length - 1 ? 5 : 2;
+              },
+            },
+            pageBreak: "after",
+          };
+
+          return [qrCodeSection, setDataSection];
+        })
+        .flat(),
+      styles: {
+        title: {
+          fontSize: 14,
+          bold: true,
+          alignment: "center",
+          margin: [0, 0, 0, 10],
+        },
+        tableHeader: {
+          bold: true,
+          fillColor: "#EEEEEE",
+        },
+        tableCell: {
+          margin: [5, 2, 5, 2],
+          fontSize: 10,
+          wordBreak: "break-all",
+        },
+      },
     };
-    pdfMake.createPdf(docDefinition).open();
+
+    if (viewPdf) {
+      pdfMake.createPdf(docDefinition).open();
+    } else {
+      pdfMake.createPdf(docDefinition).download(fileName);
+    }
   };
 
   const handleFileUpload = (event) => {
@@ -93,38 +242,95 @@ const App = () => {
     reader.readAsText(file);
   };
 
+  function openForm() {
+    document.getElementById("myForm").style.display = "block";
+  }
+
+  function closeForm() {
+    document.getElementById("myForm").style.display = "none";
+  }
+
+  function sendWhatsApp(event) {
+    event.preventDefault();
+    let url = "https://wa.me/" + phone.replace(/\D/g, "");
+
+    window.open(url);
+  }
+
   return (
-    <div class="container">
+    <div class="main-container">
       <h1>XML to QrCode Converter</h1>
-      <label class="upload">
-        Upload XML file
-        <input
-          type="file"
-          accept=".xml"
-          onChange={handleFileUpload}
-          style={{ display: "none" }}
-        />
-      </label>
-      <button
-        class="generate-qrcodes"
-        onClick={generateQrCodes}
-        disabled={!xmlData || loading}
-      >
-        <span class="generate-qrcodes-text">
-          {loading ? "Generating..." : "Generate QR Codes"}
-        </span>
-      </button>
-      <button
-        class="generate-pdf"
-        onClick={generatePdf}
-        disabled={!qrCodes.length}
-      >
-        Generate PDF
-      </button>
-      {loading && <p class="loading">Generating QR codes, please wait...</p>}
+      <div className="btnContainer">
+        <label class="upload">
+          Upload XML file
+          <input
+            type="file"
+            accept=".xml"
+            onChange={handleFileUpload}
+            style={{ display: "none" }}
+          />
+        </label>
+        <button
+          class="generate-qrcodes"
+          onClick={generateQrCodes}
+          disabled={!xmlData || loading}
+        >
+          <span class="generate-qrcodes-text">
+            {loading ? "Generating..." : "Generate QR Codes"}
+          </span>
+        </button>
+        <button
+          class="generate-pdf"
+          onClick={() => {
+            generatePdf(true);
+          }}
+          disabled={!qrCodes.length}
+        >
+          View PDF
+        </button>
+        <button
+          class="generate-pdf"
+          disabled={!qrCodes.length}
+          onClick={() => {
+            generatePdf(false);
+          }}
+        >
+          Download PDF
+        </button>
+        {loading && <p class="loading">Generating QR codes, please wait...</p>}
+      </div>
+
+      <div class="container">
+        <button class="floating-btn" onClick={openForm}>
+          Whatsapp 📞
+        </button>
+        <div class="form-popup" id="myForm">
+          <form class="form-container">
+            <h3>Send a Message</h3>
+            <label for="phone">
+              <b>Phone Number</b>
+            </label>
+            <input
+              type="tel"
+              id="phone"
+              name="phone"
+              required
+              onChange={(event) => setPhone(event.target.value)}
+            />
+
+            <button type="submit" class="btn" onClick={sendWhatsApp}>
+              Send
+            </button>
+            <button type="button" class="btn cancel" onClick={closeForm}>
+              Close
+            </button>
+          </form>
+        </div>
+      </div>
+
       {qrCodes.length > 0 && (
         <div class="qrcodes-container">
-          {qrCodes.map((qrCode, index) => (
+          {qrCodes.map(({ qrCode }, index) => (
             <img
               key={index}
               src={qrCode}
