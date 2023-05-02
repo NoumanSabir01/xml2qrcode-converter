@@ -70,6 +70,24 @@ const App = () => {
             return `,${paddedRg},${paddedAg}`;
           })
           .join("");
+        const setBlocksDataForPdf = blocksMatch
+          .map((block) => {
+            const blockValues = block.match(/RG="(.*?)"/);
+            const rg = blockValues && blockValues[1];
+            const agMatch = block.match(/AG="(.*?)"/);
+            const ag = agMatch && agMatch[1];
+
+            const paddedRg =
+              rg &&
+              rg
+                .split(",")
+                .map((r) => (parseInt(r) < 10 ? `0${r}` : r))
+                .join(",");
+            const paddedAg = ag && (parseInt(ag) < 10 ? `0${ag}` : ag);
+
+            return `,${paddedRg},${paddedAg}\n`;
+          })
+          .join("");
 
         let start =
           ln === "USMM" || ln === "TMM"
@@ -99,7 +117,7 @@ const App = () => {
 
         blockData.push({
           setId: setId,
-          data: setBlocksData.replace(",", ""),
+          data: setBlocksDataForPdf.replace(",", ""),
           lotData: `LOT21:W${start}${mid}${setBlocksData.replace(",", "")}\n`,
         });
       }
@@ -155,55 +173,26 @@ const App = () => {
           };
 
           const setDataSection = {
-            table: {
-              dontBreakRows: true,
-              headerRows: 1,
-              widths: ["auto", "*"],
-              body: [
-                [
-                  { text: "Set ID", style: "tableHeader", width: "auto" },
-                  { text: "Data", style: "tableHeader", width: "*" },
-                ],
-                ...qrCodeData.setsData.map(({ setId, data }) => [
-                  { text: setId, style: "tableCell", width: "auto" },
-                  {
-                    text: addNewlines(data),
-                    style: "tableCell",
-                    width: "*",
-                  },
-                ]),
-              ],
-            },
-            layout: {
-              defaultBorder: false,
-              hLineWidth: (i, node) => {
-                return i === 0 || i === node.table.body.length ? 0 : 1;
+            columns: [
+              {
+                stack: qrCodeData.setsData
+                  .slice(0, 5)
+                  .map(({ setId, data }) => [
+                    { text: `Set ${setId}`, style: "subtitle" },
+                    { text: data, style: "text" },
+                  ]),
               },
-              fillColor: function (rowIndex) {
-                return rowIndex % 2 === 0 ? "#EEEEEE" : null;
+              {
+                stack: qrCodeData.setsData
+                  .slice(5, 10)
+                  .map(({ setId, data }) => [
+                    { text: `Set ${setId}`, style: "subtitle" },
+                    { text: data, style: "text" },
+                  ]),
               },
-              vLineWidth: (i, node) => {
-                return 0;
-              },
-              hLineColor: (i, node) => {
-                return i === 0 || i === node.table.body.length
-                  ? "transparent"
-                  : "#ccc";
-              },
-              paddingLeft: (i, node) => {
-                return i === 0 ? 5 : 5;
-              },
-              paddingRight: (i, node) => {
-                return i === 0 ? 5 : 0;
-              },
-              paddingTop: (i, node) => {
-                return i === 0 ? 5 : 2;
-              },
-              paddingBottom: (i, node) => {
-                return i === node.table.body.length - 1 ? 5 : 2;
-              },
-            },
+            ],
             pageBreak: "after",
+            style: "setDataSection",
           };
 
           return [qrCodeSection, setDataSection];
@@ -216,15 +205,18 @@ const App = () => {
           alignment: "center",
           margin: [0, 0, 0, 10],
         },
-        tableHeader: {
+        subtitle: {
+          fontSize: 16,
           bold: true,
-          fillColor: "#EEEEEE",
-          fontSize: 16,
+          margin: [0, 10, 0, 5],
         },
-        tableCell: {
-          margin: [5, 2, 5, 2],
-          fontSize: 16,
-          wordBreak: "break-all",
+        text: {
+          fontSize: 14,
+          margin: [0, 0, 0, 10],
+        },
+        setDataSection: {
+          margin: [0, 0],
+          columnGap: 5,
         },
       },
     };
@@ -259,17 +251,6 @@ const App = () => {
     let url = "https://wa.me/" + phone.replace(/\D/g, "");
 
     window.open(url);
-  }
-
-  function addNewlines(str) {
-    let result = "";
-    for (let i = 0; i < str.length; i++) {
-      result += str[i];
-      if ((i + 1) % 60 === 0) {
-        result += "\n";
-      }
-    }
-    return result;
   }
 
   return (
