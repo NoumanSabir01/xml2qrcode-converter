@@ -67,7 +67,7 @@ const App = () => {
                 .join(",");
             const paddedAg = ag && (parseInt(ag) < 10 ? `0${ag}` : ag);
 
-            return `${paddedRg}${paddedAg}`;
+            return `,${paddedRg},${paddedAg}`;
           })
           .join("");
 
@@ -89,18 +89,18 @@ const App = () => {
             : "X";
 
         let mid =
-          imp === "True" || ln === "TLX"
+          imp[1] === "True" || ln === "TLX"
             ? "MYS"
             : ln === "TMJJ"
             ? ""
-            : imp === "False"
+            : imp[1] === "False"
             ? "MNS"
             : "";
 
         blockData.push({
           setId: setId,
-          data: setBlocksData,
-          lotData: `LOT21:W${start}${mid}${setBlocksData}\n`,
+          data: setBlocksData.replace(",", ""),
+          lotData: `LOT21:W${start}${mid}${setBlocksData.replace(",", "")}\n`,
         });
       }
 
@@ -124,7 +124,9 @@ const App = () => {
 
   const generatePdf = (viewPdf) => {
     const fileName = `${Ln}-${Dn}-Set-${qrCodes[0].setsData[0].setId}-${
-      qrCodes[qrCodes.length - 1].setsData[9].setId
+      qrCodes[qrCodes.length - 1].setsData[
+        qrCodes[qrCodes.length - 1].setsData.length - 1
+      ].setId
     }.pdf`;
 
     const docDefinition = {
@@ -154,6 +156,7 @@ const App = () => {
 
           const setDataSection = {
             table: {
+              dontBreakRows: true,
               headerRows: 1,
               widths: ["auto", "*"],
               body: [
@@ -161,10 +164,10 @@ const App = () => {
                   { text: "Set ID", style: "tableHeader", width: "auto" },
                   { text: "Data", style: "tableHeader", width: "*" },
                 ],
-                ...qrCodeData.setsData.map(({ setId, lotData }) => [
+                ...qrCodeData.setsData.map(({ setId, data }) => [
                   { text: setId, style: "tableCell", width: "auto" },
                   {
-                    text: lotData.replaceAll(",", ""),
+                    text: addNewlines(data),
                     style: "tableCell",
                     width: "*",
                   },
@@ -208,7 +211,7 @@ const App = () => {
         .flat(),
       styles: {
         title: {
-          fontSize: 14,
+          fontSize: 18,
           bold: true,
           alignment: "center",
           margin: [0, 0, 0, 10],
@@ -216,10 +219,11 @@ const App = () => {
         tableHeader: {
           bold: true,
           fillColor: "#EEEEEE",
+          fontSize: 16,
         },
         tableCell: {
           margin: [5, 2, 5, 2],
-          fontSize: 10,
+          fontSize: 16,
           wordBreak: "break-all",
         },
       },
@@ -255,6 +259,17 @@ const App = () => {
     let url = "https://wa.me/" + phone.replace(/\D/g, "");
 
     window.open(url);
+  }
+
+  function addNewlines(str) {
+    let result = "";
+    for (let i = 0; i < str.length; i++) {
+      result += str[i];
+      if ((i + 1) % 60 === 0) {
+        result += "\n";
+      }
+    }
+    return result;
   }
 
   return (
